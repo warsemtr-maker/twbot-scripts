@@ -37,6 +37,12 @@
       "aktif": true
     },
     {
+      "id": "maden_denge",
+      "label": "🏗 dengele maden",
+      "url": "http://warsemtv.altervista.org/20-05-2525/scriptler/denge.js",
+      "aktif": true
+    },
+    {
       "id": "bina",
       "label": "🏗 farmbot",
       "url": "http://warsemtv.altervista.org/20-05-2525/Yagma2.js",
