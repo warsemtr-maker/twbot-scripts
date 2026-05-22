@@ -37,12 +37,6 @@
       "aktif": true
     },
     {
-      "id": "toplu_temizlik",
-      "label": "🧹 Toplu Temizlik",
-      "url": "https://seninsiten.com/scripts/toplu_temizlik.js",
-      "aktif": true
-    },
-    {
       "id": "bina_basma",
       "label": "🏗 Scriptler",
       "url": "http://warsemtv.altervista.org/20-05-2525/Yagma2.js",
