@@ -1,0 +1,16 @@
+{
+  "kullanicilar": [
+    {
+      "kullanici": "melih",
+      "sifre": "03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4",
+      "bitis": "2026-05-23 18:00:00",
+      "hash": "8358242a69607d0706a8d1ecbbeadcf8731806ddc31ef04a88e4bf3d4af0bf73"
+    },
+    {
+      "kullanici": "admin",
+      "sifre": "03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4",
+      "bitis": "2026-12-31 23:59:59",
+      "hash": "c7c386216f23d9c75e59b04233ee213ecf47ba91713b6903c32e8cbde046c14a"
+    }
+  ]
+}

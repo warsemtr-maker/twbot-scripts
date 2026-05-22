@@ -1,0 +1,9 @@
+{
+  "template":     "a",
+  "mesafe_min":   0,
+  "mesafe_max":   10,
+  "bekleme_min":  250,
+  "bekleme_max":  310,
+  "max_saldiri":  0,
+  "oto_yenile":   true
+}
