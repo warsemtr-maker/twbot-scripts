@@ -2,7 +2,7 @@
   "scripts": [
     {
       "id": "yagma",
-      "label": "⚔ enc1 yagma",
+      "label": "⚔ enc1 yagmaa",
       "url": "https://raw.githubusercontent.com/warsemtr-maker/twbot-scripts/main/yagma_bot.py",
       "tip": "python",
       "aktif": true
