@@ -27,7 +27,6 @@ SUNUCU       = "enc1.tribalwars.net"
 LOOT_URL     = f"https://{SUNUCU}/game.php?screen=am_farm"
 
 # ── Loot Assistant Otomasyon JS ───────────────────────────────
-# Mesafe filtresi, asker kontrolü ve saldırı gönderme
 LOOT_JS = """
 (function() {
     function log(msg) {
@@ -35,7 +34,6 @@ LOOT_JS = """
         console.log('[YagmaBot]', msg);
     }
 
-    // Loot Assistant sayfası mı?
     function sayfaKontrol() {
         return (
             document.querySelector('#am_widget_Farm') !== null ||
@@ -44,14 +42,10 @@ LOOT_JS = """
         );
     }
 
-    // Bir satırdaki mesafeyi oku (fields sütunu)
-    // Loot Assistant tablosunda her satır: köy adı | mesafe | A | B
     function satirMesafeOku(row) {
-        // "fields" sütunu genellikle 3. veya 4. td içinde "X.XX" formatında
         const cells = row.querySelectorAll('td');
         for (const cell of cells) {
             const txt = (cell.innerText || '').trim();
-            // Sadece sayısal mesafe değeri: "7.1" veya "12.45"
             if (/^\\d+(\\.\\d+)?$/.test(txt)) {
                 return parseFloat(txt);
             }
@@ -59,31 +53,21 @@ LOOT_JS = """
         return null;
     }
 
-    // Satırdaki asker durumunu kontrol et
-    // Buton kırmızıysa veya disabled ise asker yok demektir
     function satirAskerVarMi(btn) {
         if (!btn) return false;
         if (btn.disabled) return false;
         if (btn.classList.contains('disabled')) return false;
-        // Bazı versiyonlarda buton rengi kırmızı olur (asker yok)
         const style = window.getComputedStyle(btn);
-        // opacity 0.4 veya benzeri → devre dışı
         const opacity = parseFloat(style.opacity || '1');
         if (opacity < 0.6) return false;
-        // parent satırın arka plan rengi kırmızıysa asker yok
         const row = btn.closest('tr');
         if (row) {
             const bg = window.getComputedStyle(row).backgroundColor;
-            // rgb(255, x, x) → kırmızı uyarı
             if (bg && bg.startsWith('rgb(255,') && !bg.includes('255, 255')) return false;
         }
         return true;
     }
 
-    // Ana fonksiyon
-    // template: 'a' | 'b'
-    // minMesafe, maxMesafe: field sınırları
-    // maxSaldiri: 0 = sınırsız
     function calistir(template, minMesafe, maxMesafe, maxSaldiri) {
         if (!sayfaKontrol()) {
             log('Loot Assistant sayfası değil!');
@@ -98,32 +82,24 @@ LOOT_JS = """
             return JSON.stringify({ durum: 'buton_yok', gonderilen: 0, askerYok: false });
         }
 
-        let gonderilen  = 0;
-        let atlandi     = 0;
+        let gonderilen   = 0;
+        let atlandi      = 0;
         let askerYokAdet = 0;
-        let mesafeDisi  = 0;
+        let mesafeDisi   = 0;
 
         tumButonlar.forEach(function(btn, idx) {
             if (maxSaldiri > 0 && gonderilen >= maxSaldiri) return;
 
             const row = btn.closest('tr');
 
-            // ── Mesafe Filtresi ──────────────────────────────
             if (row && (minMesafe > 0 || maxMesafe > 0)) {
                 const mesafe = satirMesafeOku(row);
                 if (mesafe !== null) {
-                    if (minMesafe > 0 && mesafe < minMesafe) {
-                        mesafeDisi++;
-                        return; // bu köyü atla
-                    }
-                    if (maxMesafe > 0 && mesafe > maxMesafe) {
-                        mesafeDisi++;
-                        return; // bu köyü atla
-                    }
+                    if (minMesafe > 0 && mesafe < minMesafe) { mesafeDisi++; return; }
+                    if (maxMesafe > 0 && mesafe > maxMesafe) { mesafeDisi++; return; }
                 }
             }
 
-            // ── Asker Kontrolü ───────────────────────────────
             if (!satirAskerVarMi(btn)) {
                 askerYokAdet++;
                 log('⚠ Asker yok — köy atlandı (' + (idx + 1) + ')');
@@ -131,7 +107,6 @@ LOOT_JS = """
                 return;
             }
 
-            // ── Saldırı Gönder ───────────────────────────────
             const gecikmems = gonderilen * (280 + Math.floor(Math.random() * 350));
             (function(b, i, g) {
                 setTimeout(function() {
@@ -147,7 +122,6 @@ LOOT_JS = """
             gonderilen++;
         });
 
-        // Asker tamamen bitti mi? (gönderilen 0, atlanmış = asker yok sayısı > 0)
         const askerYok = (gonderilen === 0 && askerYokAdet > 0);
 
         log('Gönderilen: ' + gonderilen +
@@ -155,15 +129,14 @@ LOOT_JS = """
             ' | Mesafe dışı: ' + mesafeDisi);
 
         return JSON.stringify({
-            durum:       askerYok ? 'asker_yok' : 'ok',
-            gonderilen:  gonderilen,
-            atlandi:     atlandi,
-            mesafeDisي:  mesafeDisi,
-            askerYok:    askerYok
+            durum:      askerYok ? 'asker_yok' : 'ok',
+            gonderilen: gonderilen,
+            atlandi:    atlandi,
+            mesafeDisi: mesafeDisi,
+            askerYok:   askerYok
         });
     }
 
-    // Yenileme süresi oku
     function yenilemeSuresiOku() {
         const divler = Array.from(document.querySelectorAll('div, span, td'));
         for (const el of divler) {
@@ -199,6 +172,10 @@ class YagmaPage(QWebEnginePage):
     def javaScriptConsoleMessage(self, level, message, line, source):
         if "[YagmaBot]" in message:
             self.konsol_sinyali.emit(message.replace("[YagmaBot]", "").strip())
+
+    # ✅ Popup / yeni pencere açılmak istendiğinde aynı sayfada aç
+    def createWindow(self, _type):
+        return self
 
 
 # ── Ana Pencere ───────────────────────────────────────────────
@@ -259,13 +236,11 @@ class YagmaBot(QMainWindow):
         ayarlar_layout = QFormLayout(ayarlar)
         ayarlar_layout.setSpacing(8)
 
-        # Template seçimi
         self.template_sec = QComboBox()
         self.template_sec.addItems(["Template A", "Template B", "Önce A, sonra B"])
         self.template_sec.setStyleSheet(self._combo_style())
         ayarlar_layout.addRow(self._lbl("Template:"), self.template_sec)
 
-        # Max saldırı
         self.max_saldiri = QSpinBox()
         self.max_saldiri.setRange(0, 500)
         self.max_saldiri.setValue(0)
@@ -273,7 +248,6 @@ class YagmaBot(QMainWindow):
         self.max_saldiri.setStyleSheet(self._spin_style())
         ayarlar_layout.addRow(self._lbl("Max saldırı:"), self.max_saldiri)
 
-        # Mesafe aralığı
         self.mesafe_min = QDoubleSpinBox()
         self.mesafe_min.setRange(0, 200)
         self.mesafe_min.setValue(0)
@@ -292,7 +266,6 @@ class YagmaBot(QMainWindow):
         self.mesafe_max.setStyleSheet(self._spin_style())
         ayarlar_layout.addRow(self._lbl("Max mesafe:"), self.mesafe_max)
 
-        # Bekleme süresi
         self.bekleme_min = QSpinBox()
         self.bekleme_min.setRange(60, 3600)
         self.bekleme_min.setValue(250)
@@ -307,7 +280,6 @@ class YagmaBot(QMainWindow):
         self.bekleme_max.setStyleSheet(self._spin_style())
         ayarlar_layout.addRow(self._lbl("Bekleme max:"), self.bekleme_max)
 
-        # Otomatik yenileme
         self.oto_yenile = QCheckBox("Sayfadan süreyi oku")
         self.oto_yenile.setChecked(True)
         self.oto_yenile.setStyleSheet(f"color:{C['text2']}; font-size:12px;")
@@ -350,7 +322,6 @@ class YagmaBot(QMainWindow):
         self.btn_baslat.clicked.connect(self._toggle)
         sol_layout.addWidget(self.btn_baslat)
 
-        # Şimdi saldır (manuel)
         btn_simdi = QPushButton("⚡ Şimdi Saldır")
         btn_simdi.setFixedHeight(36)
         btn_simdi.setCursor(Qt.PointingHandCursor)
@@ -364,7 +335,6 @@ class YagmaBot(QMainWindow):
 
         sol_layout.addStretch()
 
-        # Konsol
         konsol_lbl = QLabel("KONSOL")
         konsol_lbl.setStyleSheet(f"color:{C['text4']}; font-size:10px; letter-spacing:1px;")
         sol_layout.addWidget(konsol_lbl)
@@ -386,7 +356,6 @@ class YagmaBot(QMainWindow):
         sag.setContentsMargins(0, 0, 0, 0)
         sag.setSpacing(0)
 
-        # URL bar
         url_bar_frame = QFrame()
         url_bar_frame.setFixedHeight(38)
         url_bar_frame.setStyleSheet(f"background:{C['bg2']}; border-bottom:1px solid {C['border']};")
@@ -432,6 +401,7 @@ class YagmaBot(QMainWindow):
         self.page.konsol_sinyali.connect(self._konsol_ekle)
         self.browser.setPage(self.page)
         self.browser.loadFinished.connect(self._sayfa_yuklendi)
+        self.browser.urlChanged.connect(lambda url: self.url_bar.setText(url.toString()))  # ✅ URL bar güncelle
         self.browser.setUrl(QUrl(LOOT_URL))
         sag.addWidget(self.browser, stretch=1)
 
@@ -449,11 +419,9 @@ class YagmaBot(QMainWindow):
     def _sayfa_yuklendi(self, ok):
         if not ok:
             return
-        # Yağma JS'ini her yüklemede enjekte et
         self.browser.page().runJavaScript(LOOT_JS)
 
         if self.calisiyor:
-            # Çalışıyorsa sayfa yenilendi → saldırı gönder
             QTimer.singleShot(1500, self._saldiri_gonder)
 
     # ── Başlat / Durdur ───────────────────────────────────────
@@ -489,8 +457,6 @@ class YagmaBot(QMainWindow):
         self.tur_sayisi += 1
         self.lbl_tur.setText(str(self.tur_sayisi))
         self._konsol_ekle(f"── Tur {self.tur_sayisi} başladı ──")
-
-        # Sayfayı yenile → _sayfa_yuklendi tetiklenince saldırı gönderilir
         self.browser.reload()
 
     # ── Saldırı Gönder ────────────────────────────────────────
@@ -519,7 +485,7 @@ class YagmaBot(QMainWindow):
 
     def _saldiri_sonucu(self, sonuc):
         if not sonuc:
-            self._konsol_ekle("Sonuc alinamadi")
+            self._konsol_ekle("Sonuç alınamadı")
             self._bekleyen_sonuc = max(0, self._bekleyen_sonuc - 1)
             self._tur_tamamla()
             return
@@ -534,16 +500,16 @@ class YagmaBot(QMainWindow):
             self.lbl_toplam.setText(str(self.toplam_saldiri))
 
             if gonderilen > 0:
-                self._konsol_ekle(f"Gonderilen: {gonderilen} (toplam: {self.toplam_saldiri})")
+                self._konsol_ekle(f"Gönderilen: {gonderilen} (toplam: {self.toplam_saldiri})")
             if mesafe_disi > 0:
-                self._konsol_ekle(f"Mesafe filtresi: {mesafe_disi} koy atlandi")
+                self._konsol_ekle(f"Mesafe filtresi: {mesafe_disi} köy atlandı")
             if asker_yok:
                 self._tur_asker_yok = True
-                self._konsol_ekle("Asker bitti, bekleme moduna geciliyor")
+                self._konsol_ekle("Asker bitti, bekleme moduna geçiliyor")
             if durum == "buton_yok":
-                self._konsol_ekle("Hic saldiri butonu bulunamadi")
+                self._konsol_ekle("Hiç saldırı butonu bulunamadı")
         except Exception as ex:
-            self._konsol_ekle(f"Parse hatasi: {ex}")
+            self._konsol_ekle(f"Parse hatası: {ex}")
         finally:
             self._bekleyen_sonuc = max(0, self._bekleyen_sonuc - 1)
             self._tur_tamamla()
@@ -562,10 +528,9 @@ class YagmaBot(QMainWindow):
             self.yenileme_timer.setSingleShot(True)
             self.yenileme_timer.start(bekleme_ms)
         else:
-            self.lbl_durum.setText("Calisiyor")
+            self.lbl_durum.setText("Çalışıyor")
             self.lbl_durum.setStyleSheet(f"color:{C['green']}; font-weight:bold;")
             QTimer.singleShot(2000, self._sonraki_turu_planla)
-
 
     # ── Sonraki Turu Planla ───────────────────────────────────
     def _sonraki_turu_planla(self):
@@ -574,7 +539,6 @@ class YagmaBot(QMainWindow):
 
         def _sure_belirle(sayfa_suresi):
             if self.oto_yenile.isChecked() and sayfa_suresi:
-                # Sayfadan okunan süreyi kullan + biraz random
                 min_ms = sayfa_suresi.get("min", self.bekleme_min.value() * 1000)
                 max_ms = sayfa_suresi.get("max", self.bekleme_max.value() * 1000)
             else:
