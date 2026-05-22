@@ -107,7 +107,7 @@ LOOT_JS = """
                 return;
             }
 
-            const gecikmems = gonderilen * (280 + Math.floor(Math.random() * 350));
+            const gecikmems = gonderilen * (750 + Math.floor(Math.random() * 1350));
             (function(b, i, g) {
                 setTimeout(function() {
                     try {
