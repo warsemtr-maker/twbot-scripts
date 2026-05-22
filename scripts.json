@@ -31,12 +31,6 @@
       "aktif": true
     },
     {
-      "id": "farmbot",
-      "label": "🧹 b",
-      "url": "https://seninsiten.com/scripts/temizlik1.js",
-      "aktif": true
-    },
-    {
       "id": "bina_basma",
       "label": "🏗 Scriptler",
       "url": "http://warsemtv.altervista.org/20-05-2525/Yagma2.js",
