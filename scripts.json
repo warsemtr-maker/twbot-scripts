@@ -1,22 +1,8 @@
 {
   "scripts": [
     {
-      "id": "yagma",
-      "label": "⚔ enc1 yagmaaalla",
-      "url": "https://raw.githubusercontent.com/warsemtr-maker/twbot-scripts/main/yagma_bot.py",
-      "tip": "python",
-      "aktif": true
-    },
-       {
-      "id": "yagma2",
-      "label": "⚔ enc1 yag",
-      "url": "https://raw.githubusercontent.com/warsemtr-maker/twbot-scripts/main/yagma_bot1.py",
-      "tip": "python",
-      "aktif": true
-    },
-    {
       "id": "saldiri",
-      "label": "✖ Zamanlı Saldırı",
+      "label": "⚔ Zamanlı Saldırı",
       "url": "http://warsemtv.altervista.org/20-05-2525/scriptler/saldr.js",
       "aktif": true
     },
@@ -46,7 +32,7 @@
     },
     {
       "id": "farmbot",
-      "label": "🧹 Farmbot",
+      "label": "🧹 b",
       "url": "https://seninsiten.com/scripts/temizlik1.js",
       "aktif": true
     },
@@ -63,9 +49,15 @@
       "aktif": true
     },
     {
+      "id": "bina",
+      "label": "🏗 farmbot",
+      "url": "http://warsemtv.altervista.org/20-05-2525/Yagma2.js",
+      "aktif": true
+    },
+    {
       "id": "kisla_asker",
-      "label": "⚔ Kışla Asker",
-      "url": "https://seninsiten.com/scripts/kisla_asker.js",
+      "label": "🛕 bina bas",
+      "url": "http://warsemtv.altervista.org/20-05-2525/bina2.js",
       "aktif": true
     }
   ]
