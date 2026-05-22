@@ -8,8 +8,9 @@
     },
     {
       "id": "deneme",
-      "label": "⚔ python1",
-      "url": "https://raw.githubusercontent.com/warsemtr-maker/twbot-scripts/refs/heads/main/yagma_bot.py",
+      "label": "✖ deneme",
+      "url": "https://raw.githubusercontent.com/warsemtr-maker/twbot-scripts/main/yagma_bot.py",
+      "tip": "python",
       "aktif": true
     },
     {
