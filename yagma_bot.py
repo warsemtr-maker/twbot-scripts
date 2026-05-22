@@ -23,7 +23,7 @@ C = {
 }
 
 # ── Sunucu Ayarları ───────────────────────────────────────────
-SUNUCU       = "tr1.tribalwars.com.tr"
+SUNUCU       = "enc1.tribalwars.net/game.php"
 LOOT_URL     = f"https://{SUNUCU}/game.php?screen=am_farm"
 
 # ── Loot Assistant Otomasyon JS ───────────────────────────────
