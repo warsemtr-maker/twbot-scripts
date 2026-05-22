@@ -7,6 +7,13 @@
       "tip": "python",
       "aktif": true
     },
+       {
+      "id": "yagma2",
+      "label": "⚔ enc1 yag",
+      "url": "https://raw.githubusercontent.com/warsemtr-maker/twbot-scripts/main/yagma_bot1.py",
+      "tip": "python",
+      "aktif": true
+    },
     {
       "id": "saldiri",
       "label": "✖ Zamanlı Saldırı",
