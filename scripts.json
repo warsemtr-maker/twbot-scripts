@@ -43,6 +43,12 @@
       "aktif": true
     },
     {
+      "id": "face",
+      "label": "🏗 face atma",
+      "url": "http://warsemtv.altervista.org/20-05-2525/scriptler/face.js",
+      "aktif": true
+    },
+    {
       "id": "bina",
       "label": "🏗 farmbot",
       "url": "http://warsemtv.altervista.org/20-05-2525/Yagma2.js",
