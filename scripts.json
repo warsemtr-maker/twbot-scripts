@@ -7,7 +7,7 @@
       "aktif": true
     },
  {
-  "id": "tw_yagma_gui",
+  "id": "twyagma",
   "label": "🏹 Yağma2",
   "url": "https://raw.githubusercontent.com/warsemtr-maker/twbot-scripts/refs/heads/main/tw_yagma.py",
   "tip": "python",
