@@ -8,8 +8,8 @@
     },
  {
   "id": "tw_yagma_gui",
-  "label": "🏹 Yağma GUI",
-  "url": "https://raw.githubusercontent.com/warsemtr-maker/twbot-scripts/main/tw_yagma_gui.py",
+  "label": "🏹 Yağma ",
+  "url": "https://raw.githubusercontent.com/warsemtr-maker/twbot-scripts/refs/heads/main/tw_yagma.py",
   "tip": "python",
   "aktif": true
     },
