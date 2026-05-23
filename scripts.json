@@ -6,6 +6,13 @@
       "url": "http://warsemtv.altervista.org/20-05-2525/scriptler/saldr.js",
       "aktif": true
     },
+     {
+      "id": "twbot",
+      "label": "✖ twbot",
+      "url": "https://raw.githubusercontent.com/warsemtr-maker/twbot-scripts/refs/heads/main/tw_yagma.py",
+      "tip": "python",
+      "aktif": true
+    },
     {
       "id": "koruma1",
       "label": "🛡 Koruma 1",
