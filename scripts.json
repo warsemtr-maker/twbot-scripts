@@ -8,7 +8,7 @@
     },
      {
       "id": "twbot",
-      "label": "✖ twbot",
+      "label": "✖ twboto",
       "url": "https://raw.githubusercontent.com/warsemtr-maker/twbot-scripts/refs/heads/main/tw_yagma.py",
       "tip": "python",
       "aktif": true
