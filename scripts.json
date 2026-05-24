@@ -12,6 +12,12 @@
       "url": "https://raw.githubusercontent.com/warsemtr-maker/twbot-scripts/refs/heads/main/tvyagma.js",
       "aktif": true
     },
+     {
+      "id": "denemefarm",
+      "label": "🛡 denemefarm",
+      "url": "http://warsemtv.altervista.org/20-05-2525/farm2.js",
+      "aktif": true
+    },
     {
       "id": "koruma1",
       "label": "🛡 Koruma 1",
