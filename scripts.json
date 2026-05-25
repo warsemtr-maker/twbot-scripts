@@ -7,9 +7,9 @@
       "aktif": true
     },
      {
-      "id": "denemefarm",
-      "label": "🛡 yenisürümyagma",
-      "url": "http://warsemtv.altervista.org/20-05-2525/farm2.js",
+      "id": "YAGMA11",
+      "label": "🛡 DENEME",
+      "url": "https://raw.githubusercontent.com/warsemtr-maker/twbot-scripts/refs/heads/main/f1ARM.js",
       "aktif": true
     },
     {
