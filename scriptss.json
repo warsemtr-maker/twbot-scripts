@@ -1,0 +1,18 @@
+scripts.json[
+  {
+    "name": "Farm Bot",
+    "url": "https://site.com/farm"
+  },
+  {
+    "name": "Attack Planner",
+    "url": "https://site.com/attack"
+  },
+  {
+    "name": "Village Manager",
+    "url": "https://site.com/village"
+  },
+  {
+    "name": "Market Bot",
+    "url": "https://site.com/market"
+  }
+]
