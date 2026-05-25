@@ -1,4 +1,19 @@
-
+// ==UserScript==
+// @name         FarmGod Bot v3
+// @namespace    https://higamy.github.io/TW/
+// @version      3.0
+// @description  FarmGod Bot - Uzaktan kontrol, istatistik, gunluk rapor, bot koruma yeniden deneme
+// @author       FarmGod
+// @include        https://*.tribalwars.*/game.php*screen=am_farm*
+// @match        https://*.die-staemme.*/game.php*screen=am_farm*
+// @include         https://*.klanlar.*/game.php*screen=am_farm*
+// @grant        GM_getValue
+// @grant        GM_setValue
+// @grant        GM_xmlhttpRequest
+// @connect      api.telegram.org
+// @require      https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js
+// @run-at       document-idle
+// ==/UserScript==
 
 (function() {
     'use strict';
