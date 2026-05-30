@@ -1,0 +1,466 @@
+<?php
+// ============================================================
+// TW Alert - Panel + @require ile çekilebilir script
+// ============================================================
+
+$configFile = __DIR__ . '/tw_config.json';
+
+$defaults = [
+    'botToken'      => '',
+    'chatId'        => '',
+    'checkInterval' => 60,
+    'maxAgeHours'   => 3,
+];
+
+$config = file_exists($configFile)
+    ? array_merge($defaults, json_decode(file_get_contents($configFile), true) ?? [])
+    : $defaults;
+
+$message     = '';
+$messageType = '';
+
+// ── Form kaydet ──────────────────────────────────────────────
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (isset($_POST['save_config'])) {
+        $config['botToken']      = trim($_POST['botToken'] ?? '');
+        $config['chatId']        = trim($_POST['chatId'] ?? '');
+        $config['checkInterval'] = max(10, (int)($_POST['checkInterval'] ?? 60));
+        $config['maxAgeHours']   = max(1,  (int)($_POST['maxAgeHours']   ?? 3));
+
+        if (file_put_contents($configFile, json_encode($config, JSON_PRETTY_PRINT))) {
+            $message     = '✅ Ayarlar kaydedildi!';
+            $messageType = 'success';
+        } else {
+            $message     = '❌ Dosya yazılamadı. Klasör iznini kontrol et.';
+            $messageType = 'error';
+        }
+    }
+}
+
+// ── @require modu: ?js parametresi varsa düz JS döndür ───────
+if (isset($_GET['js'])) {
+    header('Content-Type: application/javascript; charset=utf-8');
+    header('Cache-Control: no-cache, no-store, must-revalidate');
+
+    $token    = addslashes($config['botToken']);
+    $chatId   = addslashes($config['chatId']);
+    $interval = (int)$config['checkInterval'];
+    $maxAge   = (int)$config['maxAgeHours'];
+
+    echo <<<JS
+(function () {
+    'use strict';
+
+    const BOT_TOKEN      = '{$token}';
+    const CHAT_ID        = '{$chatId}';
+    const CHECK_INTERVAL = {$interval} * 1000;
+    const MAX_AGE_MS     = {$maxAge} * 60 * 60 * 1000;
+
+    let unitSpeedsCache = null;
+
+    const unitMapping = {
+        spear:'🗡️ Mızraklı', sword:'⚔️ Kılıçlı', axe:'🪓 Baltacı',
+        archer:'🏹 Okçu', spy:'🕵️ Casus', light:'🐴 Hafif Süvari',
+        marcher:'🏹🐴 Atlı Okçu', heavy:'🛡️ Ağır Süvari',
+        ram:'🪵 Koç', catapult:'💣 Katapult',
+        knight:'👑 Şövalye', snob:'📜 Soylu',
+    };
+
+    function escapeHtml(str) {
+        return (str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+
+    function timeToSeconds(str) {
+        const p = (str || '0:0:0').trim().split(':').map(Number);
+        if (p.length === 3) return p[0]*3600 + p[1]*60 + p[2];
+        if (p.length === 2) return p[0]*60 + p[1];
+        return p[0];
+    }
+
+    function sendTelegram(html) {
+        if (!BOT_TOKEN) { console.warn('[TW-Alert] Token ayarlanmamış!'); return; }
+        GM_xmlhttpRequest({
+            method: 'GET',
+            url: 'https://api.telegram.org/bot' + BOT_TOKEN + '/sendMessage'
+               + '?chat_id=' + encodeURIComponent(CHAT_ID)
+               + '&text='    + encodeURIComponent(html)
+               + '&parse_mode=HTML',
+            onload:  (r) => console.log('[TW-Alert] Telegram:', r.status),
+            onerror: (e) => console.error('[TW-Alert] Telegram hatası:', e),
+        });
+    }
+
+    async function fetchUnitSpeeds() {
+        if (unitSpeedsCache) return unitSpeedsCache;
+        const stored = GM_getValue('unitSpeeds_' + window.location.host, null);
+        if (stored) { unitSpeedsCache = stored; return stored; }
+        try {
+            const res  = await fetch('/interface.php?func=get_unit_info');
+            const text = await res.text();
+            const xml  = new DOMParser().parseFromString(text, 'text/xml');
+            const speeds = {};
+            xml.querySelectorAll('config > *').forEach(u => {
+                const s = u.querySelector('speed')?.textContent;
+                if (s) speeds[u.tagName] = Number(s);
+            });
+            GM_setValue('unitSpeeds_' + window.location.host, speeds);
+            unitSpeedsCache = speeds;
+            return speeds;
+        } catch { return null; }
+    }
+
+    function sendAttackNotification(attacks, worldCode) {
+        const playerName = (typeof game_data !== 'undefined' && game_data?.player?.name)
+            ? game_data.player.name : 'Bilinmiyor';
+
+        let msg = '🚨 <b>YENİ SALDIRI!</b>\n'
+                + '🌍 <b>Dünya:</b> ' + escapeHtml(worldCode) + '\n'
+                + '👤 <b>Oyuncu:</b> ' + escapeHtml(playerName) + '\n\n';
+
+        attacks.forEach(a => {
+            msg += '⚔️ <b>' + escapeHtml(a.name) + '</b>\n'
+                 + '👺 Saldırgan: ' + escapeHtml(a.attacker) + '\n'
+                 + '🎯 Hedef: '     + escapeHtml(a.target)   + '\n'
+                 + '⏳ Kalan: '     + a.remaining             + '\n'
+                 + '🕐 Varış: '     + a.arrivalTime           + '\n'
+                 + '🐴 Tahmini Birim: ' + a.guessedUnit       + '\n---\n';
+        });
+        msg += '🕒 ' + new Date().toLocaleString('tr-TR');
+        sendTelegram(msg);
+    }
+
+    async function checkIncomingAttacks() {
+        const incEl = document.getElementById('incomings_amount');
+        if (!incEl || parseInt(incEl.innerText) === 0) return;
+
+        const worldCode = (window.location.href.match(/https:\/\/([a-z0-9]+)\./) || [])[1] || 'Bilinmiyor';
+        const villageId = window.game_data?.village?.id
+                       || new URLSearchParams(window.location.search).get('village');
+        if (!villageId) return;
+
+        try {
+            const url  = window.location.origin + '/game.php?village=' + villageId + '&screen=overview_villages&mode=incomings';
+            const html = await (await fetch(url)).text();
+            const doc  = new DOMParser().parseFromString(html, 'text/html');
+
+            const rows = doc.querySelectorAll([
+                'table.vis tr.command-row','table.vis tr.nowrap',
+                'table.vis tr.row_a','table.vis tr.row_b',
+                'table.overview_table tr.command-row','table.overview_table tr.nowrap',
+                'table.overview_table tr.row_a','table.overview_table tr.row_b',
+            ].join(', '));
+            if (!rows.length) return;
+
+            const unitSpeeds = await fetchUnitSpeeds();
+            const knownKey   = 'knownAttacksList_' + worldCode;
+            let knownAttacks = GM_getValue(knownKey, {});
+
+            const now = Date.now();
+            let cleaned = false;
+            for (const id in knownAttacks) {
+                if (now - (knownAttacks[id].savedAt || 0) > MAX_AGE_MS) {
+                    delete knownAttacks[id]; cleaned = true;
+                }
+            }
+            if (cleaned) GM_setValue(knownKey, knownAttacks);
+
+            const newAttacks     = {};
+            const currentAttacks = {};
+
+            rows.forEach(row => {
+                const tds  = row.querySelectorAll('td');
+                if (tds.length < 2) return;
+                const link = tds[0].querySelector('a[href*="info_command"]');
+                if (!link) return;
+                const commandId = new URLSearchParams(link.href.split('?')[1]).get('id');
+                if (!commandId) return;
+
+                const attackName    = tds[0].querySelector('.quickedit-label,.rename-icon')?.textContent.trim() || link.textContent.trim();
+                const targetVillage = tds[1].textContent.trim();
+                const originVillage = tds.length >= 4 ? tds[2].textContent.trim() : '';
+                const attackerName  = tds.length >= 4 ? tds[3].textContent.trim() : 'Bilinmiyor';
+                const displayName   = (originVillage?.length > 1 && !attackName.includes(originVillage))
+                    ? attackName + ' (' + originVillage + ')' : attackName;
+
+                const timerEl          = row.querySelector('span[data-endtime],.timer,td:last-child');
+                const remainingTimeStr = timerEl?.textContent.trim() || '00:00:00';
+                const endtime          = timerEl?.dataset?.endtime;
+                const arrivalTime      = endtime
+                    ? new Date(Number(endtime) * 1000).toLocaleString('tr-TR')
+                    : new Date(Date.now() + timeToSeconds(remainingTimeStr) * 1000).toLocaleString('tr-TR');
+
+                let dist = tds.length >= 6 ? parseFloat(tds[4].textContent.trim()) : NaN;
+                currentAttacks[commandId] = { savedAt: Date.now() };
+
+                if (!knownAttacks[commandId]) {
+                    if (isNaN(dist)) {
+                        const tM = targetVillage.match(/\((\d{1,3})\|(\d{1,3})\)/);
+                        const oM = originVillage.match(/\((\d{1,3})\|(\d{1,3})\)/);
+                        if (tM && oM) dist = Math.sqrt(Math.pow(+tM[1]-+oM[1],2)+Math.pow(+tM[2]-+oM[2],2));
+                    }
+
+                    let guessedUnit = 'Bilinmiyor';
+                    if (!isNaN(dist) && dist > 0 && unitSpeeds) {
+                        const remSecs = timeToSeconds(remainingTimeStr);
+                        const matches = [];
+                        for (const u in unitSpeeds) {
+                            if (!unitSpeeds[u]) continue;
+                            const travelSecs = Math.round(dist * unitSpeeds[u] * 60);
+                            if (Math.abs(travelSecs - remSecs) / remSecs < 0.05)
+                                matches.push({ name: u, diff: Math.abs(travelSecs - remSecs) });
+                        }
+                        if (matches.length) {
+                            matches.sort((a, b) => a.diff - b.diff);
+                            guessedUnit = unitMapping[matches[0].name] || matches[0].name;
+                        }
+                    }
+
+                    newAttacks[commandId] = {
+                        id: commandId, name: displayName, target: targetVillage,
+                        attacker: attackerName, remaining: remainingTimeStr,
+                        arrivalTime, guessedUnit,
+                    };
+                }
+            });
+
+            GM_setValue(knownKey, currentAttacks);
+            const newList = Object.values(newAttacks);
+            if (newList.length > 0) {
+                console.log('[TW-Alert] ' + newList.length + ' yeni saldırı!');
+                sendAttackNotification(newList, worldCode);
+            } else {
+                console.log('[TW-Alert] Yeni saldırı yok.');
+            }
+
+        } catch (err) {
+            console.error('[TW-Alert] Hata:', err);
+        }
+    }
+
+    GM_registerMenuCommand('🧪 Test Bildirimi Gönder', () => {
+        sendTelegram('🧪 <b>Test bildirimi!</b>\nScript çalışıyor. (' + new Date().toLocaleString('tr-TR') + ')');
+    });
+
+    GM_registerMenuCommand('🗑️ Kayıtlı Saldırıları Sıfırla', () => {
+        const worldCode = (window.location.href.match(/https:\/\/([a-z0-9]+)\./) || [])[1] || 'Bilinmiyor';
+        GM_setValue('knownAttacksList_' + worldCode, {});
+        alert('✅ Saldırılar sıfırlandı!');
+    });
+
+    console.log('[TW-Alert] Başlatıldı. Aralık: ' + CHECK_INTERVAL/1000 + 'sn');
+    checkIncomingAttacks();
+    setInterval(checkIncomingAttacks, CHECK_INTERVAL);
+
+})();
+JS;
+    exit;
+}
+
+// ── HTML Panel ───────────────────────────────────────────────
+$phpUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http')
+        . '://' . $_SERVER['HTTP_HOST'] . $_SERVER['PHP_SELF'];
+$requireUrl = $phpUrl . '?js';
+?>
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TW Alert — Panel</title>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700;900&family=Crimson+Pro:ital,wght@0,300;0,400;0,600;1,300&display=swap" rel="stylesheet">
+<style>
+    :root {
+        --bg:#0d0b08; --bg2:#151209; --bg3:#1e1810;
+        --border:#3a2e1a; --gold:#c8922a; --gold-lt:#e8b84b; --gold-dim:#7a5a1a;
+        --green:#27ae60; --green-lt:#2ecc71; --red-lt:#e74c3c;
+        --text:#d4c4a0; --text-dim:#7a6a50; --radius:6px;
+    }
+    *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
+    body {
+        background:var(--bg); color:var(--text);
+        font-family:'Crimson Pro',Georgia,serif; font-size:17px; min-height:100vh;
+        background-image:
+            radial-gradient(ellipse 80% 60% at 50% 0%, #2a1e0a 0%, transparent 70%),
+            repeating-linear-gradient(0deg,transparent,transparent 39px,rgba(58,46,26,.18) 40px),
+            repeating-linear-gradient(90deg,transparent,transparent 39px,rgba(58,46,26,.10) 40px);
+    }
+    header { text-align:center; padding:48px 20px 32px; border-bottom:1px solid var(--border); }
+    header::after { content:''; display:block; width:240px; height:2px; background:linear-gradient(90deg,transparent,var(--gold),transparent); margin:24px auto 0; }
+    .header-icon { font-size:52px; margin-bottom:12px; filter:drop-shadow(0 0 18px rgba(200,146,42,.5)); }
+    h1 { font-family:'Cinzel',serif; font-size:clamp(22px,5vw,36px); font-weight:900; color:var(--gold-lt); letter-spacing:.08em; text-shadow:0 0 30px rgba(200,146,42,.4); }
+    .subtitle { color:var(--text-dim); font-style:italic; font-size:15px; margin-top:6px; }
+    .container { max-width:860px; margin:0 auto; padding:32px 20px 64px; display:grid; gap:28px; }
+    .card { background:var(--bg2); border:1px solid var(--border); border-radius:var(--radius); overflow:hidden; box-shadow:0 4px 24px rgba(0,0,0,.4); }
+    .card-header { background:var(--bg3); border-bottom:1px solid var(--border); padding:14px 20px; font-family:'Cinzel',serif; font-size:13px; font-weight:700; color:var(--gold); letter-spacing:.12em; text-transform:uppercase; }
+    .card-body { padding:24px 20px; }
+    .alert { padding:12px 18px; border-radius:var(--radius); margin-bottom:20px; font-size:15px; font-weight:600; }
+    .alert-success { background:rgba(39,174,96,.12); border:1px solid rgba(39,174,96,.35); color:var(--green-lt); }
+    .alert-error   { background:rgba(192,57,43,.12);  border:1px solid rgba(192,57,43,.35); color:var(--red-lt); }
+    .form-grid { display:grid; grid-template-columns:1fr 1fr; gap:18px; }
+    @media(max-width:560px){ .form-grid{ grid-template-columns:1fr; } }
+    label { display:block; font-size:12px; font-family:'Cinzel',serif; letter-spacing:.1em; color:var(--gold-dim); text-transform:uppercase; margin-bottom:6px; }
+    input[type=text], input[type=number] { width:100%; background:var(--bg); border:1px solid var(--border); border-radius:var(--radius); color:var(--text); font-family:'Crimson Pro',serif; font-size:16px; padding:10px 14px; outline:none; transition:border-color .2s,box-shadow .2s; }
+    input:focus { border-color:var(--gold-dim); box-shadow:0 0 0 3px rgba(200,146,42,.12); }
+    .hint { font-size:12px; color:var(--text-dim); margin-top:5px; font-style:italic; }
+    .btn-row { display:flex; gap:12px; flex-wrap:wrap; margin-top:22px; }
+    button, .btn { font-family:'Cinzel',serif; font-size:13px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; padding:11px 22px; border-radius:var(--radius); border:none; cursor:pointer; transition:all .2s; }
+    .btn-primary { background:linear-gradient(135deg,#b8821a,#d4a030); color:#0d0b08; }
+    .btn-primary:hover { background:linear-gradient(135deg,#c8922a,#e8b84b); }
+    .btn-secondary { background:transparent; border:1px solid var(--gold-dim); color:var(--gold-dim); }
+    .btn-secondary:hover { border-color:var(--gold); color:var(--gold); }
+
+    /* @require kutusu */
+    .require-box { position:relative; background:#080706; border:1px solid var(--border); border-radius:var(--radius); padding:16px 120px 16px 16px; font-family:monospace; font-size:13px; color:#a8c080; word-break:break-all; line-height:1.7; }
+    .require-box .lbl { color:var(--gold-dim); font-size:11px; font-family:'Cinzel',serif; letter-spacing:.08em; display:block; margin-bottom:4px; }
+    .copy-btn { position:absolute; top:50%; right:12px; transform:translateY(-50%); background:var(--bg3); border:1px solid var(--border); color:var(--gold-dim); font-family:'Cinzel',serif; font-size:11px; padding:6px 14px; border-radius:var(--radius); cursor:pointer; transition:all .2s; white-space:nowrap; }
+    .copy-btn:hover { border-color:var(--gold); color:var(--gold); }
+    .copy-btn.copied { border-color:var(--green); color:var(--green-lt); }
+
+    /* Tampermonkey scripti */
+    .tm-script { background:#080706; border:1px solid var(--border); border-radius:var(--radius); padding:16px; font-family:monospace; font-size:12.5px; color:#a8c080; line-height:1.8; position:relative; }
+    .tm-copy { position:absolute; top:10px; right:10px; background:var(--bg3); border:1px solid var(--border); color:var(--gold-dim); font-family:'Cinzel',serif; font-size:11px; padding:6px 14px; border-radius:var(--radius); cursor:pointer; transition:all .2s; }
+    .tm-copy:hover { border-color:var(--gold); color:var(--gold); }
+    .tm-copy.copied { border-color:var(--green); color:var(--green-lt); }
+    .kw { color:#c792ea; } .cm { color:#546e7a; font-style:italic; } .str { color:#c3e88d; }
+
+    /* Steps */
+    .steps { list-style:none; counter-reset:step; display:grid; gap:14px; }
+    .steps li { counter-increment:step; display:flex; gap:14px; align-items:flex-start; font-size:15px; line-height:1.6; }
+    .steps li::before { content:counter(step); flex-shrink:0; width:28px; height:28px; background:var(--bg3); border:1px solid var(--gold-dim); border-radius:50%; display:grid; place-items:center; font-family:'Cinzel',serif; font-size:12px; color:var(--gold); margin-top:1px; }
+    code { background:var(--bg3); border:1px solid var(--border); border-radius:3px; padding:1px 6px; font-size:13px; color:#a8c080; font-family:monospace; }
+    footer { text-align:center; padding:20px; color:var(--text-dim); font-size:13px; border-top:1px solid var(--border); font-style:italic; }
+</style>
+</head>
+<body>
+
+<header>
+    <div class="header-icon">⚔️</div>
+    <h1>TW Alert</h1>
+    <p class="subtitle">Tribal Wars — Telegram Saldırı Bildirim Paneli</p>
+</header>
+
+<div class="container">
+
+    <?php if ($message): ?>
+    <div class="alert alert-<?= $messageType ?>"><?= htmlspecialchars($message) ?></div>
+    <?php endif; ?>
+
+    <!-- ── Ayarlar ── -->
+    <div class="card">
+        <div class="card-header">⚙️ &nbsp; Telegram Ayarları</div>
+        <div class="card-body">
+            <form method="POST">
+                <div class="form-grid">
+                    <div>
+                        <label>Bot Token</label>
+                        <input type="text" name="botToken" value="<?= htmlspecialchars($config['botToken']) ?>" placeholder="123456:ABC-DEF...">
+                        <p class="hint">@BotFather'dan alınan token</p>
+                    </div>
+                    <div>
+                        <label>Chat ID</label>
+                        <input type="text" name="chatId" value="<?= htmlspecialchars($config['chatId']) ?>" placeholder="5583163261">
+                        <p class="hint">@userinfobot ile öğren</p>
+                    </div>
+                    <div>
+                        <label>Kontrol Aralığı (saniye)</label>
+                        <input type="number" name="checkInterval" value="<?= (int)$config['checkInterval'] ?>" min="10" max="3600">
+                        <p class="hint">Kaç saniyede bir kontrol etsin</p>
+                    </div>
+                    <div>
+                        <label>Saldırı Hafızası (saat)</label>
+                        <input type="number" name="maxAgeHours" value="<?= (int)$config['maxAgeHours'] ?>" min="1" max="24">
+                        <p class="hint">Eski saldırı kaydı ne zaman silinsin</p>
+                    </div>
+                </div>
+                <div class="btn-row">
+                    <button type="submit" name="save_config" class="btn-primary">💾 Kaydet</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ── @require URL ── -->
+    <div class="card">
+        <div class="card-header">🔗 &nbsp; Tampermonkey @require Adresi</div>
+        <div class="card-body">
+            <p style="margin-bottom:14px; color:var(--text-dim); font-size:15px;">
+                Aşağıdaki adresi Tampermonkey scriptine <code>@require</code> olarak ekle.
+                Script her yüklendiğinde bu adresten token ve ayarları gömülü alır.
+            </p>
+            <div class="require-box" id="req-box">
+                <span class="lbl">// @require</span>
+                <?= htmlspecialchars($requireUrl) ?>
+                <button class="copy-btn" onclick="copyReq(this)">📋 Kopyala</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Tampermonkey Script ── -->
+    <div class="card">
+        <div class="card-header">📜 &nbsp; Tampermonkey'e Yapıştır (Sadece 1 Kez)</div>
+        <div class="card-body">
+            <p style="margin-bottom:16px; color:var(--text-dim); font-size:15px;">
+                Bu kısmı Tampermonkey'e <strong>bir kez</strong> yapıştır. Bundan sonra token ve ayarları
+                sadece bu panelden değiştirirsin — scripte bir daha dokunmana gerek yok.
+            </p>
+            <div class="tm-script" id="tm-code">
+<button class="tm-copy" onclick="copyTm(this)">📋 Kopyala</button>
+<span class="cm">// ==UserScript==</span>
+<span class="cm">// @name         Tribal Wars – Saldırı Telegram Bildirimi w5</span>
+<span class="cm">// @namespace    http://tampermonkey.net/</span>
+<span class="cm">// @version      3.0</span>
+<span class="cm">// @description  Gelen saldırıları tespit eder, birim tahmin eder ve Telegram'a bildirir.</span>
+<span class="cm">// @match        https://*.tribalwars.com.tr/game.php*</span>
+<span class="cm">// @match        https://*.die-staemme.de/game.php*</span>
+<span class="cm">// @match        https://*.tribalwars.net/game.php*</span>
+<span class="cm">// @match        https://*.klanlar.org/game.php*</span>
+<span class="cm">// @grant        GM_getValue</span>
+<span class="cm">// @grant        GM_setValue</span>
+<span class="cm">// @grant        GM_xmlhttpRequest</span>
+<span class="cm">// @grant        GM_registerMenuCommand</span>
+<span class="cm">// @connect      api.telegram.org</span>
+<span class="cm">// @connect      warsemtv.altervista.org</span>
+<span class="str">// @require      <?= htmlspecialchars($requireUrl) ?></span>
+<span class="cm">// ==/UserScript==</span>
+
+<span class="cm">// Tüm kod @require ile yükleniyor.</span>
+<span class="cm">// Token ve ayarlar için: <?= htmlspecialchars($phpUrl) ?></span>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Kurulum ── -->
+    <div class="card">
+        <div class="card-header">🚀 &nbsp; Kurulum</div>
+        <div class="card-body">
+            <ol class="steps">
+                <li>Bu panelde <strong>Bot Token</strong> ve <strong>Chat ID</strong>'yi gir → <strong>Kaydet</strong>.</li>
+                <li><a href="https://www.tampermonkey.net/" target="_blank" style="color:var(--gold)">Tampermonkey</a> → <strong>Yeni Script</strong> → yukarıdaki kodu yapıştır → <code>Ctrl+S</code>.</li>
+                <li>Tribal Wars'a gir — script otomatik çalışmaya başlar. 🎯</li>
+                <li>Bundan sonra token veya ayar değiştirmek için sadece bu paneli kullan. Scripte dokunmana gerek yok.</li>
+            </ol>
+        </div>
+    </div>
+
+</div>
+
+<footer>TW Alert — Tribal Wars Telegram Bildirim Scripti &bull; <?= date('Y') ?></footer>
+
+<script>
+function copyReq(btn) {
+    const url = '<?= addslashes($requireUrl) ?>';
+    navigator.clipboard.writeText(url).then(() => flash(btn));
+}
+function copyTm(btn) {
+    const lines = [...document.getElementById('tm-code').querySelectorAll('span')]
+        .map(s => s.textContent).join('\n');
+    navigator.clipboard.writeText(lines).then(() => flash(btn));
+}
+function flash(btn) {
+    const orig = btn.textContent;
+    btn.textContent = '✅ Kopyalandı!'; btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = orig; btn.classList.remove('copied'); }, 2200);
+}
+</script>
+</body>
+</html>
